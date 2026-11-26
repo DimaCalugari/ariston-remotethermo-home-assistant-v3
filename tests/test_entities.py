@@ -81,9 +81,25 @@ def test_climate_hvac_action_reflects_heat_pump_activity(
     ariston_device.is_plant_in_cool_mode = cooling
     ariston_device.is_flame_on_value = flame
     ariston_device.is_heating_pump_on_value = pump
+    ariston_device.is_zone_in_manual_mode = lambda zone: True
+    ariston_device.is_zone_in_time_program_mode = lambda zone: False
     entity = AristonThermostat(1, coordinator, ARISTON_CLIMATE_TYPES[0])
 
     assert entity.hvac_action is expected
+
+
+def test_climate_hvac_action_is_off_when_zone_is_off(
+    coordinator, ariston_device
+):
+    ariston_device.is_plant_in_heat_mode = True
+    ariston_device.is_plant_in_cool_mode = False
+    ariston_device.is_flame_on_value = True
+    ariston_device.is_heating_pump_on_value = True
+    ariston_device.is_zone_in_manual_mode = lambda zone: False
+    ariston_device.is_zone_in_time_program_mode = lambda zone: False
+    entity = AristonThermostat(1, coordinator, ARISTON_CLIMATE_TYPES[0])
+
+    assert entity.hvac_action is HVACAction.OFF
 
 
 async def test_climate_temperature_requires_value_and_updates_device(
@@ -132,6 +148,10 @@ def test_climate_properties_and_supported_modes(coordinator, ariston_device):
     assert entity.target_temperature_step == 0.5
     assert entity.native_current_temperature == 19.5
     assert entity.native_target_temperature == 20
+    # Aliases kept for Home Assistant < 2026.11
+    assert entity.temperature_unit == "°C"
+    assert entity.current_temperature == 19.5
+    assert entity.target_temperature == 20
     assert entity.supported_features & ClimateEntityFeature.TARGET_TEMPERATURE
     assert entity.supported_features & ClimateEntityFeature.PRESET_MODE
     assert entity.hvac_mode == HVACMode.HEAT
@@ -185,7 +205,7 @@ def test_climate_hvac_mode_reflects_plant_and_zone_state(
             [],
             [],
             True,
-            [PlantMode.OFF],
+            [],
             [],
         ),
         (
@@ -194,8 +214,26 @@ def test_climate_hvac_mode_reflects_plant_and_zone_state(
             [],
             [],
             False,
-            [PlantMode.SUMMER],
             [],
+            [],
+        ),
+        (
+            HVACMode.OFF,
+            PlantMode.SUMMER,
+            [PlantMode.OFF],
+            [ZoneMode.OFF.value],
+            True,
+            [],
+            [(ZoneMode.OFF, 1)],
+        ),
+        (
+            HVACMode.OFF,
+            PlantMode.WINTER,
+            [PlantMode.OFF],
+            [ZoneMode.OFF.value],
+            True,
+            [],
+            [(ZoneMode.OFF, 1)],
         ),
         (
             HVACMode.AUTO,
@@ -409,6 +447,10 @@ def test_water_heater_properties_and_supported_features(coordinator, ariston_dev
     assert entity.max_temp == 70
     assert entity.precision == 0.1
     assert entity.native_temperature_unit == "°C"
+    # Aliases kept for Home Assistant < 2026.11
+    assert entity.temperature_unit == "°C"
+    assert entity.current_temperature == 45
+    assert entity.target_temperature == 55
     assert entity.name == "Test boiler"
     assert entity.unique_id == "gateway-1-water_heater"
     assert entity.icon == "mdi:water-pump"

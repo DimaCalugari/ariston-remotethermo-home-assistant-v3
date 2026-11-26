@@ -113,6 +113,24 @@ class AristonThermostat(AristonEntity, ClimateEntity):
         """Return the target temperature for the device."""
         return self.device.get_target_temp_value(self.zone)
 
+    # Backward compatibility with Home Assistant < 2026.11, which only reads
+    # the non-native property names. On 2026.11+, when an entity provides
+    # both, the native_* members take precedence without deprecation warning.
+    @property
+    def temperature_unit(self) -> str:
+        """Return the unit of measurement (HA < 2026.11)."""
+        return self.native_temperature_unit
+
+    @property
+    def current_temperature(self) -> float:
+        """Return the current temperature (HA < 2026.11)."""
+        return self.native_current_temperature
+
+    @property
+    def target_temperature(self) -> float:
+        """Return the target temperature (HA < 2026.11)."""
+        return self.native_target_temperature
+
     @property
     def supported_features(self) -> int:
         """Return the supported features for this device integration."""
@@ -163,6 +181,9 @@ class AristonThermostat(AristonEntity, ClimateEntity):
     @property
     def hvac_action(self):
         """Return the current running hvac operation."""
+        if self.hvac_mode == HVACMode.OFF:
+            return HVACAction.OFF
+
         if_flame_on = bool(self.device.is_flame_on_value)
         if_heating_pump_on = bool(getattr(self.device, 'is_heating_pump_on_value', False))
 
@@ -199,10 +220,8 @@ class AristonThermostat(AristonEntity, ClimateEntity):
             current_plant_mode = self.device.plant_mode
 
             if hvac_mode == HVACMode.OFF:
-                if self.device.is_plant_mode_options_contains_off:
-                    await self.device.async_set_plant_mode(PlantMode.OFF)
-                else:
-                    await self.device.async_set_plant_mode(PlantMode.SUMMER)
+                if ZoneMode.OFF.value in zone_modes:
+                    await self.device.async_set_zone_mode(ZoneMode.OFF, self.zone)
             elif hvac_mode == HVACMode.AUTO:
                 if current_plant_mode in [
                     PlantMode.WINTER,
